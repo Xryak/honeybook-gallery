@@ -1,0 +1,50 @@
+# --- OS ---
+.DS_Store
+*.swp
+
+# --- Local Claude Code tooling (not part of the deliverable) ---
+.claude/
+
+# --- Python / backend ---
+backend/.venv/
+**/__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Generated SQLite DB + seed photos (regenerated on first run)
+backend/*.db
+backend/seed/photos/*.jpg
+data/
+
+# --- Node / frontend ---
+node_modules/
+frontend/dist/
+*.log
+.vite/
+
+# TypeScript incremental build info + compiled config outputs (vue-tsc emits these)
+*.tsbuildinfo
+frontend/*.config.js
+frontend/*.config.d.ts
+
+# --- Frontend test / e2e artifacts ---
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.playwright/
+
+# --- AI persona testing reports ---
+ai-testing/reports/*.html
+ai-testing/reports/*.json
+ai-testing/.venv/
+
+# --- Secrets / local env ---
+.env
+.env.local
+*.local

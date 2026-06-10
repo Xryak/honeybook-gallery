@@ -1,0 +1,37 @@
+# One command to a running app:  docker compose up --build
+#
+#   App:        http://localhost:8080/galleries/g_001
+#   Backend:    http://localhost:8000  (exposed for direct API / persona tests)
+#   Get a code: docker compose exec backend python -m app.cli send-otp g_001
+#               then read it from:  docker compose logs backend
+#
+# Favorites persist across restarts via the `gallery-data` volume.
+
+services:
+  backend:
+    build: ./backend
+    image: honeybook-backend
+    environment:
+      HONEYBOOK_DB_URL: sqlite:////data/app.db
+    volumes:
+      - gallery-data:/data
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  frontend:
+    build: ./frontend
+    image: honeybook-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+
+volumes:
+  gallery-data:

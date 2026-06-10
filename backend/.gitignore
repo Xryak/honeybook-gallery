@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+app.db
+seed/photos/*.jpg
+.pytest_cache/
+*.egg-info/

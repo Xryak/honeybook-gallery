@@ -1,0 +1,276 @@
+openapi: 3.0.3
+info:
+  title: Honeybook Gallery API
+  version: 0.1.0
+  description: |
+    Client-facing gallery flow. OTP-gated read access to seeded photos with a
+    per-photo favorite toggle. Runs entirely locally; no real email, no real
+    image upload, no external services.
+
+    All routes are prefixed with `/api` so they don't collide with the
+    frontend SPA's own routes (e.g. `/galleries/:id` in the browser is a Vue
+    Router route, not an API call).
+
+servers:
+  - url: /
+    description: |
+      Same-origin via the Vite dev proxy. In dev, the browser talks to
+      http://localhost:5173 and Vite forwards `/api/*` and `/static/*` to
+      the FastAPI backend on http://localhost:8000.
+
+tags:
+  - name: auth
+    description: OTP and session minting.
+  - name: gallery
+    description: Authenticated gallery read + favorite toggle.
+
+paths:
+  /api/galleries/{id}/otp:
+    post:
+      tags: [auth]
+      summary: Generate and "send" a 6-digit OTP for a gallery
+      description: |
+        Generates a fresh 6-digit code, stores it in `otp_codes` with
+        `expires_at = now + 10 min`, and logs it to backend stdout in the form
+        `[OTP] Gallery <id>: <code> (expires in 10 min)`.
+
+        Re-requesting an OTP for the same gallery marks any prior unused codes
+        for that gallery as used, so only one code is valid at a time.
+
+        No request body. Returns only the expiry window — the code itself is
+        never returned over the wire.
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: Code generated and logged.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [expires_in]
+                properties:
+                  expires_in:
+                    type: integer
+                    description: Seconds until the code expires.
+                    example: 600
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/galleries/{id}/verify:
+    post:
+      tags: [auth]
+      summary: Verify an OTP code and receive a session token
+      description: |
+        Validates the code against `otp_codes` for the given gallery. The code
+        must be: unused, not expired, and exactly the most recently issued
+        code for this gallery.
+
+        On success: marks the code used, mints a fresh opaque bearer token
+        (`secrets.token_urlsafe(32)`), stores it in `sessions` with
+        `expires_at = now + 10 min` and `gallery_id` scoped to this gallery,
+        then returns it.
+
+        On any failure (wrong code, expired, already used, no code exists for
+        this gallery) returns 401 with `error: invalid_code`. The 401 does not
+        distinguish between these cases — no enumeration.
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  pattern: '^[0-9]{6}$'
+                  example: '482910'
+      responses:
+        '200':
+          description: Session minted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, expires_in]
+                properties:
+                  token:
+                    type: string
+                    description: |
+                      Opaque bearer token. Send on subsequent requests as
+                      `Authorization: Bearer <token>`. Scoped to the gallery
+                      the token was issued for.
+                    example: 'k3yT2tQq8x...'
+                  expires_in:
+                    type: integer
+                    description: Seconds until the session expires.
+                    example: 600
+        '401':
+          $ref: '#/components/responses/InvalidCode'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/galleries/{id}:
+    get:
+      tags: [gallery]
+      summary: Return gallery metadata and photo list
+      description: |
+        Returns the gallery and its photos with per-photo favorite state for
+        the current session. Requires a bearer token issued for THIS gallery
+        — a token issued for `g_001` will receive 401 when used against
+        `g_002`.
+      security:
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: Gallery view.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gallery'
+        '401':
+          $ref: '#/components/responses/ExpiredSession'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/galleries/{id}/favourite:
+    post:
+      tags: [gallery]
+      summary: Toggle the favorite flag on a photo
+      description: |
+        Toggles `is_favorite` for the given photo within this gallery and
+        returns the new state. The photo must belong to this gallery — a
+        photo from `g_002` cannot be favorited via `g_001`'s session.
+      security:
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [photo_id]
+              properties:
+                photo_id:
+                  type: string
+                  example: 'p_001'
+      responses:
+        '200':
+          description: New favorite state.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [photo_id, is_favorite]
+                properties:
+                  photo_id:
+                    type: string
+                    example: 'p_001'
+                  is_favorite:
+                    type: boolean
+                    example: true
+        '401':
+          $ref: '#/components/responses/ExpiredSession'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    GalleryId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        example: 'g_001'
+
+  schemas:
+    Gallery:
+      type: object
+      required: [id, title, photos]
+      properties:
+        id:
+          type: string
+          example: 'g_001'
+        title:
+          type: string
+          example: "Anna's Wedding"
+        photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Photo'
+
+    Photo:
+      type: object
+      required: [id, thumbnail_url, full_url, is_favorite]
+      properties:
+        id:
+          type: string
+          example: 'p_001'
+        thumbnail_url:
+          type: string
+          description: Server-relative URL to the thumbnail.
+          example: '/static/photos/p_001.jpg'
+        full_url:
+          type: string
+          description: |
+            Server-relative URL to the full-size image. For v1 this is the
+            same file as the thumbnail; the field exists so a future
+            click-to-enlarge interaction has somewhere to point.
+          example: '/static/photos/p_001.jpg'
+        is_favorite:
+          type: boolean
+          example: false
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [invalid_code, expired_session, not_found]
+
+  responses:
+    InvalidCode:
+      description: Code is wrong, expired, used, or absent.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: invalid_code
+
+    ExpiredSession:
+      description: |
+        Missing, malformed, expired, or wrong-gallery bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: expired_session
+
+    NotFound:
+      description: Gallery or photo does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: not_found
+
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: |
+        Opaque token from `POST /api/galleries/{id}/verify`. Send as
+        `Authorization: Bearer <token>`. Token is scoped to the gallery for
+        which it was minted and expires 10 minutes after that mint.
