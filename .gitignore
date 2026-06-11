@@ -17,8 +17,9 @@ backend/.venv/
 htmlcov/
 coverage.xml
 
-# Generated SQLite DB + seed photos (regenerated on first run)
+# Generated SQLite DB + seed photo variants (regenerated on first run)
 backend/*.db
+backend/seed/photos/**/*.jpg
 backend/seed/photos/*.jpg
 data/
 

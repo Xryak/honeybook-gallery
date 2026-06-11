@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from .. import errors
+from .. import errors, images
 from ..auth import require_session
 from ..db import get_db
 from ..models import Favorite, Gallery, GallerySession, Photo
@@ -48,7 +48,9 @@ def get_gallery(
         photos=[
             PhotoOut(
                 id=p.id,
-                thumbnail_url=p.url,
+                # Two compressed variants from the image pipeline: a light
+                # thumbnail for the grid and the full-size for click-to-enlarge.
+                thumbnail_url=images.public_url(p.id, images.THUMBNAIL),
                 full_url=p.url,
                 is_favorite=p.id in favorite_ids,
             )

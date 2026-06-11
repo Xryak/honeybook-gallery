@@ -46,8 +46,9 @@ def test_get_gallery_happy_path(app_client, capture_otp):
     assert len(body["photos"]) == 10
     first = body["photos"][0]
     assert first["id"] == "p_001"
-    assert first["thumbnail_url"] == "/static/photos/p_001.jpg"
-    assert first["full_url"] == "/static/photos/p_001.jpg"
+    assert first["thumbnail_url"] == "/static/photos/thumb/p_001.jpg"
+    assert first["full_url"] == "/static/photos/full/p_001.jpg"
+    assert first["thumbnail_url"] != first["full_url"]
     assert first["is_favorite"] is False
 
 

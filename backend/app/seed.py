@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import colorsys
-from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy.orm import Session
 
+from . import images
 from .db import Base, engine
 from .models import Gallery, Photo
-
-PHOTOS_DIR = Path(__file__).resolve().parent.parent / "seed" / "photos"
 
 GALLERIES: list[tuple[str, str, range]] = [
     ("g_001", "Anna's Wedding", range(1, 11)),
@@ -19,10 +17,6 @@ GALLERIES: list[tuple[str, str, range]] = [
 
 def _photo_id(n: int) -> str:
     return f"p_{n:03d}"
-
-
-def _photo_url(n: int) -> str:
-    return f"/static/photos/{_photo_id(n)}.jpg"
 
 
 # Tried in order; first one that loads wins. Covers macOS (Arial) and the
@@ -43,7 +37,10 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def _generate_image(path: Path, photo_id: str, n: int, total: int = 20) -> None:
+def _base_image(photo_id: str, n: int, total: int = 20) -> Image.Image:
+    """The full-resolution source for a seed photo: a unique hue with the photo
+    id stamped in the center. In a real app this would be the user's upload; the
+    derivative pipeline (`images.render_variants`) takes it from here."""
     hue = (n - 1) / total
     r, g, b = colorsys.hsv_to_rgb(hue, 0.55, 0.85)
     bg = (int(r * 255), int(g * 255), int(b * 255))
@@ -61,17 +58,17 @@ def _generate_image(path: Path, photo_id: str, n: int, total: int = 20) -> None:
         fill=(255, 255, 255),
         font=font,
     )
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    img.save(path, format="JPEG", quality=85)
+    return img
 
 
 def ensure_photo_files() -> None:
+    """Generate every photo's compressed variants if any are missing (idempotent)."""
     for _, _, photo_range in GALLERIES:
         for n in photo_range:
-            path = PHOTOS_DIR / f"{_photo_id(n)}.jpg"
-            if not path.exists():
-                _generate_image(path, _photo_id(n), n)
+            pid = _photo_id(n)
+            if all(images.storage_path(pid, v).exists() for v in images.VARIANTS):
+                continue
+            images.render_variants(pid, _base_image(pid, n))
 
 
 def seed_db(db: Session) -> None:
@@ -90,7 +87,10 @@ def seed_db(db: Session) -> None:
                 Photo(
                     id=_photo_id(n),
                     gallery_id=gid,
-                    url=_photo_url(n),
+                    # Store the canonical (full) variant URL. In a real pipeline
+                    # this would be a storage key; the thumbnail URL is derived
+                    # from the photo id via `images.public_url`.
+                    url=images.public_url(_photo_id(n), images.FULL),
                 )
             )
     db.commit()

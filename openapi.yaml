@@ -216,15 +216,16 @@ components:
           example: 'p_001'
         thumbnail_url:
           type: string
-          description: Server-relative URL to the thumbnail.
-          example: '/static/photos/p_001.jpg'
+          description: |
+            Server-relative URL to the small, heavily-compressed thumbnail
+            variant (used in the grid).
+          example: '/static/photos/thumb/p_001.jpg'
         full_url:
           type: string
           description: |
-            Server-relative URL to the full-size image. For v1 this is the
-            same file as the thumbnail; the field exists so a future
-            click-to-enlarge interaction has somewhere to point.
-          example: '/static/photos/p_001.jpg'
+            Server-relative URL to the full-size variant (used for
+            click-to-enlarge). A separate, larger derivative than the thumbnail.
+          example: '/static/photos/full/p_001.jpg'
         is_favorite:
           type: boolean
           example: false

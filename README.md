@@ -82,8 +82,8 @@ also the source the frontend's TypeScript types are generated from.
 | **AI personas** | synthetic users + contract invariants (see below) | `make personas` |
 
 ```
-60 backend tests · 99% coverage · ruff + mypy clean
-35 frontend unit/component tests · 3 Playwright E2E journeys
+65 backend tests · 99% coverage · ruff + mypy clean
+38 frontend unit/component tests · 3 Playwright E2E journeys
 6 synthetic personas (42 invariant checks) · 6 framework meta-tests
 ```
 
@@ -123,6 +123,11 @@ correctness and UX humaneness. Every run writes a shareable HTML report to
   types and the backend's contract tests, so the two halves can't silently drift.
 - **Idempotent seeding.** Galleries and 20 Pillow-generated photos are created on
   first boot and never wipe favorites on restart.
+- **Image variant pipeline.** Each photo is rendered into two compressed JPEG
+  variants — a light `thumb` for the grid and a larger `full` for click-to-enlarge
+  — under `seed/photos/<variant>/`. `backend/app/images.py` defines the variants,
+  storage layout, and URL scheme as a drop-in-shaped stand-in for a real upload →
+  derivative → object-storage/CDN pipeline (commented inline).
 - **`/healthz`** is an ops-only liveness probe (not part of the `/api` contract)
   used by the Docker healthcheck so the frontend waits for a ready backend.
 

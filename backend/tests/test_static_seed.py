@@ -1,4 +1,4 @@
-"""Static file serving, seed image generation, and seed idempotency."""
+"""Static file serving, the image-variant pipeline, and seed idempotency."""
 
 from __future__ import annotations
 
@@ -9,29 +9,42 @@ def test_healthz_ok(app_client):
     assert r.json() == {"status": "ok"}
 
 
-def test_static_photo_is_served_as_jpeg(app_client):
-    r = app_client.get("/static/photos/p_001.jpg")
-    assert r.status_code == 200
-    assert r.headers["content-type"] == "image/jpeg"
-    assert len(r.content) > 1000  # a real image, not an error page
+def test_both_variants_are_served_as_jpeg(app_client):
+    for variant in ("thumb", "full"):
+        r = app_client.get(f"/static/photos/{variant}/p_001.jpg")
+        assert r.status_code == 200, variant
+        assert r.headers["content-type"] == "image/jpeg"
+        assert len(r.content) > 500
+
+
+def test_thumbnail_is_smaller_than_full(app_client):
+    thumb = app_client.get("/static/photos/thumb/p_001.jpg").content
+    full = app_client.get("/static/photos/full/p_001.jpg").content
+    # The pipeline really downscaled + compressed: the thumb is materially lighter.
+    assert len(thumb) < len(full)
 
 
 def test_static_unknown_photo_404(app_client):
-    r = app_client.get("/static/photos/does_not_exist.jpg")
+    r = app_client.get("/static/photos/full/does_not_exist.jpg")
     assert r.status_code == 404
 
 
-def test_generate_image_is_800x600_jpeg(tmp_path):
+def test_render_variants_produces_correct_sizes(tmp_path, monkeypatch):
     from PIL import Image
 
-    from app.seed import _generate_image
+    from app import images
+    from app.seed import _base_image
 
-    path = tmp_path / "p_001.jpg"
-    _generate_image(path, "p_001", 1)
-    assert path.exists()
-    with Image.open(path) as im:
-        assert im.size == (800, 600)
-        assert im.format == "JPEG"
+    monkeypatch.setattr(images, "PHOTOS_DIR", tmp_path)
+    images.render_variants("p_001", _base_image("p_001", 1))
+
+    with Image.open(images.storage_path("p_001", images.FULL)) as full:
+        assert full.size == (800, 600)
+        assert full.format == "JPEG"
+    with Image.open(images.storage_path("p_001", images.THUMBNAIL)) as thumb:
+        # thumbnail() fits within the 320x240 box, preserving aspect ratio.
+        assert thumb.size == (320, 240)
+        assert thumb.width <= 320 and thumb.height <= 240
 
 
 def test_load_font_falls_back_when_no_ttf(monkeypatch):
@@ -42,14 +55,16 @@ def test_load_font_falls_back_when_no_ttf(monkeypatch):
     assert font is not None  # falls back to PIL's bundled default
 
 
-def test_ensure_photo_files_skips_existing(tmp_path, monkeypatch):
-    """Second call regenerates nothing (idempotent) — mtimes stay put."""
+def test_ensure_photo_files_is_idempotent(tmp_path, monkeypatch):
+    """Second call regenerates nothing — variant mtimes stay put."""
+    from app import images
+
+    monkeypatch.setattr(images, "PHOTOS_DIR", tmp_path)
     from app import seed
 
-    monkeypatch.setattr(seed, "PHOTOS_DIR", tmp_path)
     seed.ensure_photo_files()
-    made = sorted(tmp_path.glob("*.jpg"))
-    assert len(made) == 20
+    made = sorted(tmp_path.glob("**/*.jpg"))
+    assert len(made) == 40  # 20 photos x 2 variants
     mtimes = {p: p.stat().st_mtime_ns for p in made}
 
     seed.ensure_photo_files()

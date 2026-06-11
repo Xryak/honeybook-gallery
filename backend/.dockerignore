@@ -9,5 +9,6 @@
 coverage.xml
 app.db
 seed/photos/*.jpg
+seed/photos/**/*.jpg
 tests/
 .DS_Store

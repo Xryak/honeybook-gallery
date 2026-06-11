@@ -24,6 +24,9 @@ class Photo(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     gallery_id: Mapped[str] = mapped_column(ForeignKey("galleries.id"), nullable=False)
+    # Canonical (full-size) variant URL. In a real pipeline this would be a
+    # content-addressed storage key; the thumbnail URL is derived from the photo
+    # id via `images.public_url`, so only one URL needs persisting.
     url: Mapped[str] = mapped_column(String, nullable=False)
 
     gallery: Mapped[Gallery] = relationship(back_populates="photos")

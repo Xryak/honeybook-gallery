@@ -10,14 +10,17 @@ function jsonResponse(status: number, body: unknown): Response {
   } as unknown as Response
 }
 
+const photo = (id: string, fav: boolean) => ({
+  id,
+  thumbnail_url: `/static/photos/thumb/${id}.jpg`,
+  full_url: `/static/photos/full/${id}.jpg`,
+  is_favorite: fav,
+})
+
 const GALLERY = {
   id: 'g_001',
   title: "Anna's Wedding",
-  photos: [
-    { id: 'p_001', thumbnail_url: '/static/photos/p_001.jpg', full_url: '/static/photos/p_001.jpg', is_favorite: false },
-    { id: 'p_002', thumbnail_url: '/static/photos/p_002.jpg', full_url: '/static/photos/p_002.jpg', is_favorite: false },
-    { id: 'p_003', thumbnail_url: '/static/photos/p_003.jpg', full_url: '/static/photos/p_003.jpg', is_favorite: true },
-  ],
+  photos: [photo('p_001', false), photo('p_002', false), photo('p_003', true)],
 }
 
 let fetchMock: ReturnType<typeof vi.fn>
@@ -112,5 +115,31 @@ describe('GalleryGrid', () => {
 
     expect(tile.classes()).not.toContain('is-favorite') // reverted
     expect(w.emitted('session-expired')).toBeTruthy()
+  })
+
+  it('renders the lightweight thumbnail variant in the grid', async () => {
+    const w = await mountLoaded()
+    const img = w.findAll('.tile img')[0]
+    expect(img.attributes('src')).toBe('/static/photos/thumb/p_001.jpg')
+  })
+
+  it('expand opens a lightbox with the full-size variant and does not favorite', async () => {
+    const w = await mountLoaded()
+    expect(w.find('.lightbox').exists()).toBe(false)
+
+    await w.findAll('.expand')[0].trigger('click')
+
+    const lightbox = w.find('.lightbox')
+    expect(lightbox.exists()).toBe(true)
+    expect(lightbox.find('img').attributes('src')).toBe('/static/photos/full/p_001.jpg')
+    // Opening the lightbox must not toggle the favorite.
+    expect(w.findAll('.tile')[0].classes()).not.toContain('is-favorite')
+  })
+
+  it('clicking the lightbox closes it', async () => {
+    const w = await mountLoaded()
+    await w.findAll('.expand')[0].trigger('click')
+    await w.find('.lightbox').trigger('click')
+    expect(w.find('.lightbox').exists()).toBe(false)
   })
 })

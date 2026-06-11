@@ -13,6 +13,17 @@ const loading = ref(true)
 // state and reconciles to the server's authoritative response.
 const pending = ref<Set<string>>(new Set())
 
+// Click-to-enlarge: the grid renders the light `thumbnail_url`; opening the
+// lightbox swaps in the larger `full_url`. FUTURE: responsive <picture>/srcset,
+// prefetch full on hover, pinch-zoom, and keyboard left/right between photos.
+const lightbox = ref<Photo | null>(null)
+function openLightbox(photo: Photo) {
+  lightbox.value = photo
+}
+function closeLightbox() {
+  lightbox.value = null
+}
+
 async function load() {
   loading.value = true
   loadError.value = null
@@ -83,25 +94,49 @@ onMounted(load)
     <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
 
     <div v-if="gallery" class="grid">
-      <button
-        v-for="photo in gallery.photos"
-        :key="photo.id"
-        type="button"
-        class="tile"
-        :class="{ 'is-favorite': photo.is_favorite }"
-        :aria-pressed="photo.is_favorite"
-        :aria-label="`Photo ${photo.id}${photo.is_favorite ? ' (favorited)' : ''}`"
-        @click="onPhotoClick(photo)"
-      >
-        <img :src="photo.thumbnail_url" :alt="photo.id" loading="lazy" />
-        <span class="heart" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="22" height="22">
-            <path
-              d="M12 21s-7-4.35-9.5-9.5C1 8 3 4 7 4c2 0 3.5 1 5 3 1.5-2 3-3 5-3 4 0 6 4 4.5 7.5C19 16.65 12 21 12 21z"
-            />
-          </svg>
-        </span>
-      </button>
+      <!-- Each cell wraps the favorite button + a separate expand button so the
+           two actions don't nest interactive elements. Tile click = favorite;
+           expand = open the full-size lightbox. -->
+      <div v-for="photo in gallery.photos" :key="photo.id" class="cell">
+        <button
+          type="button"
+          class="tile"
+          :class="{ 'is-favorite': photo.is_favorite }"
+          :aria-pressed="photo.is_favorite"
+          :aria-label="`Photo ${photo.id}${photo.is_favorite ? ' (favorited)' : ''}`"
+          @click="onPhotoClick(photo)"
+        >
+          <!-- The grid intentionally loads the lightweight thumbnail variant. -->
+          <img :src="photo.thumbnail_url" :alt="photo.id" loading="lazy" />
+          <span class="heart" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22">
+              <path
+                d="M12 21s-7-4.35-9.5-9.5C1 8 3 4 7 4c2 0 3.5 1 5 3 1.5-2 3-3 5-3 4 0 6 4 4.5 7.5C19 16.65 12 21 12 21z"
+              />
+            </svg>
+          </span>
+        </button>
+        <button
+          type="button"
+          class="expand"
+          :aria-label="`View ${photo.id} full size`"
+          @click="openLightbox(photo)"
+        >
+          ⤢
+        </button>
+      </div>
+    </div>
+
+    <!-- Lightbox: loads the full-size variant on demand. -->
+    <div
+      v-if="lightbox"
+      class="lightbox"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="`Photo ${lightbox.id} full size`"
+      @click="closeLightbox"
+    >
+      <img :src="lightbox.full_url" :alt="lightbox.id" />
     </div>
   </section>
 </template>
@@ -134,8 +169,12 @@ h1 {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 1rem;
 }
+.cell {
+  position: relative;
+}
 .tile {
   position: relative;
+  width: 100%;
   aspect-ratio: 4 / 3;
   border: 2px solid transparent;
   border-radius: 8px;
@@ -145,9 +184,50 @@ h1 {
   cursor: pointer;
   transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.tile:hover {
+.cell:hover .tile {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.expand {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  color: #333;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.cell:hover .expand,
+.expand:focus-visible {
+  opacity: 1;
+}
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: rgba(0, 0, 0, 0.82);
+  cursor: zoom-out;
+}
+.lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 6px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
 }
 .tile img {
   width: 100%;
