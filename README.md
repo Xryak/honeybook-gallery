@@ -1,5 +1,7 @@
 # Honeybook Gallery
 
+[![CI](https://github.com/Xryak/honeybook-gallery/actions/workflows/ci.yml/badge.svg)](https://github.com/Xryak/honeybook-gallery/actions/workflows/ci.yml)
+
 A client-facing photo-gallery flow: open a link, enter a one-time code, browse a
 grid of photos, and favorite the ones you love. OTP-gated, per-gallery scoped,
 runs entirely locally. FastAPI + SQLite on the back, Vue 3 + Vite on the front.
