@@ -60,8 +60,6 @@ jobs:
   e2e:
     name: E2E · Playwright (real backend + frontend)
     runs-on: ubuntu-latest
-    env:
-      NODE_OPTIONS: --experimental-sqlite # node:sqlite reads the OTP code
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -79,6 +77,10 @@ jobs:
       - run: cd frontend && npm ci
       - run: cd frontend && npx playwright install --with-deps chromium
       - name: Playwright
+        # Flag scoped to this step only — the runner's bundled node (used by
+        # actions/*) is older and rejects it; node 22 here needs it for node:sqlite.
+        env:
+          NODE_OPTIONS: --experimental-sqlite
         run: cd frontend && npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -103,7 +105,8 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS http://localhost:8080/galleries/g_001 -o /dev/null
-          curl -fsS http://localhost:8080/static/photos/p_001.jpg -o /dev/null
+          curl -fsS http://localhost:8080/static/photos/thumb/p_001.jpg -o /dev/null
+          curl -fsS http://localhost:8080/static/photos/full/p_001.jpg -o /dev/null
           docker compose exec -T backend python -m app.cli send-otp g_001
           CODE=$(docker compose logs backend | grep '\[OTP\] Gallery g_001' | tail -1 | sed -E 's/.*g_001: ([0-9]{6}).*/\1/')
           TOKEN=$(curl -fsS -X POST http://localhost:8080/api/galleries/g_001/verify -H 'Content-Type: application/json' -d "{\"code\":\"$CODE\"}" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
